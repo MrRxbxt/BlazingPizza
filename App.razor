@@ -3,8 +3,8 @@
         <RouteView RouteData="@routeData" />
     </Found>
     <NotFound>
-        <LayoutView>
-            <p>Sorry, there's nothing at this address.</p>
+        <LayoutView Layout="typeof(MainLayout)">
+            <div class="main">Sorry, there's nothing at this address.</div>
         </LayoutView>
     </NotFound>
 </Router>
