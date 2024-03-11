@@ -20,6 +20,7 @@ namespace BlazingPizza.Endpoints
                 await connection.OpenAsync();
 
                 const string getOrdersSql = "SELECT * FROM Orders";
+                
                 var dbOrders = await connection.QueryAsync(getOrdersSql);
                 
                 if (dbOrders == null) return Results.Empty;
@@ -27,68 +28,7 @@ namespace BlazingPizza.Endpoints
                 List<OrderWithStatus> ordersWithStatus = new List<OrderWithStatus>();
                 foreach (var dbOrder in dbOrders)
                 {
-                    var orderId = dbOrder.OrderId;
-                    var deliveryAddressId = dbOrder.DeliveryAddressId;
-
-                    Order order = new()
-                    {
-                        OrderId = orderId,
-                        UserId = dbOrder.UserId,
-                        CreatedTime = dbOrder.CreatedTime
-                    };
-
-                    //address
-                    const string getAddressSql = "SELECT * FROM Address WHERE Id = @Id";
-                    Address address = await connection.QueryFirstAsync<Address>(getAddressSql, new { Id = deliveryAddressId });
-                    order.DeliveryAddress = address;
-
-                    //pizzas
-                    const string getPizzasSql = "SELECT * FROM Pizzas WHERE OrderId = @OrderId";
-                    var dbPizzas = await connection.QueryAsync(getPizzasSql, new { OrderId = orderId });
-                    List<Pizza> pizzas = new List<Pizza>();
-                    foreach (var dbPizza in dbPizzas)
-                    {
-                        var pizzaId = dbPizza.Id;
-                        var specialId = dbPizza.SpecialId;
-
-                        Pizza pizza = new()
-                        {
-                            Id = dbPizza.Id,
-                            OrderId = dbPizza.OrderId,
-                            SpecialId = specialId,
-                            Size = dbPizza.Size
-                        };
-
-                        //special
-                        const string getSpecialSql = "SELECT * FROM Specials WHERE Id = @Id";
-                        PizzaSpecial pizzaSpecial = await connection.QueryFirstAsync<PizzaSpecial>(getSpecialSql, new { Id = specialId });
-                        pizza.Special = pizzaSpecial;
-
-                        //pizzatopping
-                        const string getPizzaToppingsSql = "SELECT * FROM PizzaTopping WHERE PizzaId = @PizzaId";
-                        var dbPizzaToppings = await connection.QueryAsync(getPizzaToppingsSql, new { PizzaId = pizzaId });
-                        List<PizzaTopping> pizzaToppings = new List<PizzaTopping>();
-                        foreach (var dbPizzaTopping in dbPizzaToppings)
-                        {
-                            var toppingId = dbPizzaTopping.ToppingId;
-
-                            PizzaTopping pizzaTopping = new()
-                            {
-                                PizzaId = pizzaId,
-                                ToppingId = toppingId
-                            };
-
-                            //topping
-                            const string getToppingSql = "SELECT * FROM Toppings WHERE Id = @Id";
-                            var dbTopping = await connection.QueryFirstAsync<Topping>(getToppingSql, new { Id = toppingId });
-                            pizzaTopping.Topping = dbTopping;
-                        }
-                        pizza.Toppings = pizzaToppings;
-
-                        pizzas.Add(pizza);
-                    }
-
-                    order.Pizzas = pizzas;
+                    var order = await GetOrder(connection, dbOrder);
                     ordersWithStatus.Add(OrderWithStatus.FromOrder(order));
                 }
 
@@ -107,67 +47,7 @@ namespace BlazingPizza.Endpoints
                 
                 if (dbOrder == null) return Results.NotFound();
 
-                var deliveryAddressId = dbOrder.DeliveryAddressId;
-
-                Order order = new()
-                {
-                    OrderId = orderId,
-                    UserId = dbOrder.UserId,
-                    CreatedTime = dbOrder.CreatedTime
-                };
-
-                //address
-                const string getAddressSql = "SELECT * FROM Address WHERE Id = @Id";
-                Address address = await connection.QueryFirstAsync<Address>(getAddressSql, new { Id = deliveryAddressId });
-                order.DeliveryAddress = address;
-
-                //pizzas
-                const string getPizzasSql = "SELECT * FROM Pizzas WHERE OrderId = @OrderId";
-                var dbPizzas = await connection.QueryAsync(getPizzasSql, new { OrderId = orderId });
-                List<Pizza> pizzas = new List<Pizza>();
-                foreach (var dbPizza in dbPizzas)
-                {
-                    var pizzaId = dbPizza.Id;
-                    var specialId = dbPizza.SpecialId;
-
-                    Pizza pizza = new()
-                    {
-                        Id = dbPizza.Id,
-                        OrderId = dbPizza.OrderId,
-                        SpecialId = specialId,
-                        Size = dbPizza.Size
-                    };
-
-                    //special
-                    const string getSpecialSql = "SELECT * FROM Specials WHERE Id = @Id";
-                    PizzaSpecial pizzaSpecial = await connection.QueryFirstAsync<PizzaSpecial>(getSpecialSql, new { Id = specialId });
-                    pizza.Special = pizzaSpecial;
-
-                    //pizzatopping
-                    const string getPizzaToppingsSql = "SELECT * FROM PizzaTopping WHERE PizzaId = @PizzaId";
-                    var dbPizzaToppings = await connection.QueryAsync(getPizzaToppingsSql, new { PizzaId = pizzaId });
-                    List<PizzaTopping> pizzaToppings = new List<PizzaTopping>();
-                    foreach (var dbPizzaTopping in dbPizzaToppings)
-                    {
-                        var toppingId = dbPizzaTopping.ToppingId;
-
-                        PizzaTopping pizzaTopping = new()
-                        {
-                            PizzaId = pizzaId,
-                            ToppingId = toppingId
-                        };
-
-                        //topping
-                        const string getToppingSql = "SELECT * FROM Toppings WHERE Id = @Id";
-                        var dbTopping = await connection.QueryFirstAsync<Topping>(getToppingSql, new { Id = toppingId });
-                        pizzaTopping.Topping = dbTopping;
-                    }
-                    pizza.Toppings = pizzaToppings;
-
-                    pizzas.Add(pizza);
-                }
-
-                order.Pizzas = pizzas;
+                var order = await GetOrder(connection, dbOrder);
 
                 return order is not null ? Results.Ok(OrderWithStatus.FromOrder(order)) : Results.NotFound();
             });
@@ -244,5 +124,72 @@ namespace BlazingPizza.Endpoints
             });
         }
 
+        private static async Task<Order> GetOrder(SqlConnection connection, dynamic dbOrder)
+        {
+            var orderId = dbOrder.OrderId;
+            var deliveryAddressId = dbOrder.DeliveryAddressId;
+
+            Order order = new()
+            {
+                OrderId = orderId,
+                UserId = dbOrder.UserId,
+                CreatedTime = dbOrder.CreatedTime
+            };
+
+            //address
+            const string getAddressSql = "SELECT * FROM Address WHERE Id = @Id";
+            Address address = await connection.QueryFirstAsync<Address>(getAddressSql, new { Id = deliveryAddressId });
+            order.DeliveryAddress = address;
+
+            //pizzas
+            const string getPizzasSql = "SELECT * FROM Pizzas WHERE OrderId = @OrderId";
+            var dbPizzas = await connection.QueryAsync(getPizzasSql, new { OrderId = orderId });
+            List<Pizza> pizzas = new List<Pizza>();
+            foreach (var dbPizza in dbPizzas)
+            {
+                var pizzaId = dbPizza.Id;
+                var specialId = dbPizza.SpecialId;
+
+                Pizza pizza = new()
+                {
+                    Id = dbPizza.Id,
+                    OrderId = dbPizza.OrderId,
+                    SpecialId = specialId,
+                    Size = dbPizza.Size
+                };
+
+                //special
+                const string getSpecialSql = "SELECT * FROM Specials WHERE Id = @Id";
+                PizzaSpecial pizzaSpecial = await connection.QueryFirstAsync<PizzaSpecial>(getSpecialSql, new { Id = specialId });
+                pizza.Special = pizzaSpecial;
+
+                //pizzatopping
+                const string getPizzaToppingsSql = "SELECT * FROM PizzaTopping WHERE PizzaId = @PizzaId";
+                var dbPizzaToppings = await connection.QueryAsync(getPizzaToppingsSql, new { PizzaId = pizzaId });
+                List<PizzaTopping> pizzaToppings = new List<PizzaTopping>();
+                foreach (var dbPizzaTopping in dbPizzaToppings)
+                {
+                    var toppingId = dbPizzaTopping.ToppingId;
+
+                    PizzaTopping pizzaTopping = new()
+                    {
+                        PizzaId = pizzaId,
+                        ToppingId = toppingId
+                    };
+
+                    //topping
+                    const string getToppingSql = "SELECT * FROM Toppings WHERE Id = @Id";
+                    var dbTopping = await connection.QueryFirstAsync<Topping>(getToppingSql, new { Id = toppingId });
+                    pizzaTopping.Topping = dbTopping;
+                }
+                pizza.Toppings = pizzaToppings;
+
+                pizzas.Add(pizza);
+            }
+
+            order.Pizzas = pizzas;
+
+            return order;
+        }
     }
 }
